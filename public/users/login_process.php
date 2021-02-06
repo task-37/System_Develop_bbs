@@ -33,14 +33,28 @@ if (!password_verify($_POST['password'], $row['password'])) {
     return;
 }
 
-//ログイン状態をCookieに保存
-//セキュリティに難あり
+/* セッションについて共通処理 ここから */
+$redis = new Redis();
+$redis->connect("redis", 6379);
+$session_id_cookie_key = "session_id";
+$session_id = isset($_COOKIE[$session_id_cookie_key]) ? ($_COOKIE[$session_id_cookie_key]) : null;
+if ($session_id === null) {
+    $session_id = bin2hex(random_bytes(25));
+    setcookie($session_id_cookie_key, $session_id, 0, '/');
+}
+$redis_session_key = "session-" . $session_id;
+$session_values = $redis->exists($redis_session_key)
+    ? json_decode($redis->get($redis_session_key), true)
+    : [];
+/* ここまで */
 
-setcookie('login_id', $row['login_id'], 0, '/');
-//vvsでも使うCookieなので、パスを指定
+
+// ログインしたユーザーデータの主キーをセッションに保存します。
+$session_values["login_user_id"] = $row['id'];
+$redis->set($redis_session_key, json_encode($session_values));
+
 
 //ログイン完了したらログイン完了画面に飛ばす
-
 header("HTTP/1.1 302 Found");
 header("Location: ./login_finish.php");
 return;
